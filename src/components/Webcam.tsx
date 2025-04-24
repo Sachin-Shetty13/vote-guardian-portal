@@ -15,6 +15,7 @@ const Webcam = ({ onStatusChange, onFaceData }: WebcamProps) => {
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const detectionIntervalRef = useRef<number | null>(null);
+  const [faceDetected, setFaceDetected] = useState(false);
 
   useEffect(() => {
     const loadModels = async () => {
@@ -111,89 +112,56 @@ const Webcam = ({ onStatusChange, onFaceData }: WebcamProps) => {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     
-    // Detect faces every 500ms
-    detectionIntervalRef.current = window.setInterval(async () => {
-      if (video.paused || video.ended) return;
-      
-      // Mock face detection since we can't load actual models in this demo
-      const mockDetection = () => {
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        
-        // Clear previous drawings
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // Generate a random decision with 80% chance of face detected
-        const faceDetected = Math.random() > 0.2;
-        
-        if (faceDetected) {
-          // Draw a rectangle around a simulated face
-          const faceWidth = canvas.width * 0.4;
-          const faceHeight = canvas.height * 0.6;
-          const x = (canvas.width - faceWidth) / 2;
-          const y = (canvas.height - faceHeight) / 3;
-          
-          ctx.strokeStyle = '#28a745';
-          ctx.lineWidth = 3;
-          ctx.strokeRect(x, y, faceWidth, faceHeight);
-          
-          // Create a mock face descriptor (would be an actual descriptor in production)
-          const mockDescriptor = new Float32Array(128).fill(0).map(() => Math.random());
-          
-          onFaceData(mockDescriptor);
-          onStatusChange({
-            active: true,
-            faceDetected: true,
-            warning: null
-          });
-        } else {
-          onFaceData(null);
-          onStatusChange({
-            active: true,
-            faceDetected: false,
-            warning: "Face not detected. Please position yourself clearly in front of the camera."
-          });
-        }
-      };
-      
-      mockDetection();
-      
-      /* In a real implementation, we would use:
-      
-      const detections = await faceapi.detectAllFaces(
-        video, 
-        new faceapi.TinyFaceDetectorOptions()
-      ).withFaceLandmarks().withFaceDescriptors();
-      
+    // Fixed mock face detection to prevent flickering
+    const mockDetection = () => {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       
       // Clear previous drawings
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
-      if (detections.length === 0) {
+      // For demo purposes, always assume face is detected after initial load
+      // This prevents the flickering effect
+      const shouldDetectFace = faceDetected || Math.random() > 0.2;
+      
+      if (shouldDetectFace) {
+        setFaceDetected(true);
+        
+        // Draw a rectangle around a simulated face
+        const faceWidth = canvas.width * 0.4;
+        const faceHeight = canvas.height * 0.6;
+        const x = (canvas.width - faceWidth) / 2;
+        const y = (canvas.height - faceHeight) / 3;
+        
+        ctx.strokeStyle = '#28a745';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x, y, faceWidth, faceHeight);
+        
+        // Create a mock face descriptor (would be an actual descriptor in production)
+        const mockDescriptor = new Float32Array(128).fill(0).map(() => Math.random());
+        
+        onFaceData(mockDescriptor);
+        onStatusChange({
+          active: true,
+          faceDetected: true,
+          warning: null
+        });
+      } else {
+        setFaceDetected(false);
         onFaceData(null);
         onStatusChange({
           active: true,
           faceDetected: false,
           warning: "Face not detected. Please position yourself clearly in front of the camera."
         });
-        return;
       }
-      
-      // Draw detections
-      faceapi.draw.drawDetections(canvas, detections);
-      
-      // Use the first detected face
-      const descriptor = detections[0].descriptor;
-      onFaceData(descriptor);
-      onStatusChange({
-        active: true,
-        faceDetected: true,
-        warning: null
-      });
-      */
-    }, 500);
+    };
+    
+    // Initial face detection
+    mockDetection();
+    
+    // Set interval for periodic checks but at a slower rate to avoid flickering
+    detectionIntervalRef.current = window.setInterval(mockDetection, 2000);
   };
 
   return (

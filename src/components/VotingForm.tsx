@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { 
@@ -230,7 +231,7 @@ const VotingForm = () => {
       </CardContent>
       
       <CardFooter className="flex flex-col bg-gray-50 p-6">
-        <div className="flex justify-between w-full">
+        <div className="flex justify-between w-full items-center">
           <div className="text-sm text-gray-500">
             Your face will be temporarily recorded for verification purposes only.
           </div>
@@ -245,9 +246,9 @@ const VotingForm = () => {
         </div>
         
         {isButtonDisabled && submitButtonDisabledReason && (
-          <div className="mt-4 p-2 rounded border border-gray-300 bg-gray-100 w-full flex items-center gap-2">
-            <Info className="h-4 w-4 text-gray-500" />
-            <span className="text-sm text-gray-600">{submitButtonDisabledReason}</span>
+          <div className="mt-4 p-3 rounded-md border border-gray-300 bg-gray-100 w-full flex items-center gap-2">
+            <Info className="h-5 w-5 text-voting-primary" />
+            <span className="text-sm text-gray-700 font-medium">{submitButtonDisabledReason}</span>
           </div>
         )}
       </CardFooter>
