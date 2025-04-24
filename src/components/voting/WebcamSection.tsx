@@ -17,6 +17,8 @@ export const WebcamSection = ({
   onStatusChange,
   onFaceData
 }: WebcamSectionProps) => {
+  console.log(duplicateVoterDetected);
+
   return (
     <div className="space-y-4">
       <div>

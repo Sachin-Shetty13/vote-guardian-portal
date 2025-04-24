@@ -16,7 +16,7 @@ export const SubmitSection = ({
   onSubmit
 }: SubmitSectionProps) => {
   return (
-    <div className="flex flex-col bg-gray-50 p-6">
+    <div className="flex flex-col bg-gray-50 p-6 w-full">
       <div className="flex justify-between w-full items-center">
         <div className="text-sm text-gray-500">
           Your face will be temporarily recorded for verification purposes only.
