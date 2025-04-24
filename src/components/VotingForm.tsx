@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { 
@@ -13,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, AlertTriangle } from "lucide-react";
+import { Shield, AlertTriangle, Info } from "lucide-react";
 import { Candidate, Voter, WebcamStatus } from "@/types";
 import Webcam from "./Webcam";
 import { db } from "@/services/database";
@@ -35,15 +34,12 @@ const VotingForm = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Load candidates
     setCandidates(db.getCandidates());
   }, []);
 
-  // Check for duplicate voter when face data changes
   useEffect(() => {
     if (!currentFaceDescriptor) return;
 
-    // Check if this face has been seen before
     const matchedVoterId = faceRecognition.recognizeFace(currentFaceDescriptor);
     
     if (matchedVoterId) {
@@ -91,22 +87,18 @@ const VotingForm = () => {
 
     setIsSubmitting(true);
 
-    // Create voter record
     const voter: Voter = {
       name,
       voterId,
       voted: false
     };
 
-    // Record the vote
     const success = db.recordVote(voter, selectedCandidate);
 
-    // Store face descriptor for future duplicate checks
     if (success && currentFaceDescriptor) {
       faceRecognition.storeFace(currentFaceDescriptor, voterId);
     }
 
-    // Complete submission
     setIsSubmitting(false);
     
     if (success) {
@@ -116,7 +108,6 @@ const VotingForm = () => {
         variant: "default",
       });
 
-      // Reset form
       setName("");
       setVoterId("");
       setSelectedCandidate("");
@@ -136,6 +127,29 @@ const VotingForm = () => {
   const handleWebcamStatusChange = (status: WebcamStatus) => {
     setWebcamStatus(status);
   };
+
+  const getSubmitButtonDisabledReason = (): string | null => {
+    if (duplicateVoterDetected) {
+      return "You appear to have already voted. Duplicate voting is not allowed.";
+    }
+    
+    if (!webcamStatus.faceDetected) {
+      return "Your face must be clearly visible to ensure voting integrity.";
+    }
+    
+    if (!name || !voterId || !selectedCandidate) {
+      return "Please complete all required fields to submit your vote.";
+    }
+    
+    if (isSubmitting) {
+      return "Your vote is being processed...";
+    }
+    
+    return null;
+  };
+
+  const submitButtonDisabledReason = getSubmitButtonDisabledReason();
+  const isButtonDisabled = !!submitButtonDisabledReason;
 
   return (
     <Card className="w-full max-w-4xl mx-auto shadow-lg">
@@ -215,18 +229,27 @@ const VotingForm = () => {
         </div>
       </CardContent>
       
-      <CardFooter className="flex justify-between bg-gray-50 p-6">
-        <div className="text-sm text-gray-500">
-          Your face will be temporarily recorded for verification purposes only.
+      <CardFooter className="flex flex-col bg-gray-50 p-6">
+        <div className="flex justify-between w-full">
+          <div className="text-sm text-gray-500">
+            Your face will be temporarily recorded for verification purposes only.
+          </div>
+          <Button 
+            type="button" 
+            onClick={handleSubmit}
+            disabled={isButtonDisabled}
+            className="bg-voting-primary hover:bg-voting-primary/90"
+          >
+            {isSubmitting ? "Processing..." : "Submit Vote"}
+          </Button>
         </div>
-        <Button 
-          type="button" 
-          onClick={handleSubmit}
-          disabled={isSubmitting || !!duplicateVoterDetected || !webcamStatus.faceDetected}
-          className="bg-voting-primary hover:bg-voting-primary/90"
-        >
-          {isSubmitting ? "Processing..." : "Submit Vote"}
-        </Button>
+        
+        {isButtonDisabled && submitButtonDisabledReason && (
+          <div className="mt-4 p-2 rounded border border-gray-300 bg-gray-100 w-full flex items-center gap-2">
+            <Info className="h-4 w-4 text-gray-500" />
+            <span className="text-sm text-gray-600">{submitButtonDisabledReason}</span>
+          </div>
+        )}
       </CardFooter>
     </Card>
   );
