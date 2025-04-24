@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as faceapi from "face-api.js";
 import { WebcamStatus } from "../types";
+import { supabase } from "@/integrations/supabase/client";
 
 interface WebcamProps {
   onStatusChange: (status: WebcamStatus) => void;
@@ -15,7 +16,6 @@ const Webcam = ({ onStatusChange, onFaceData }: WebcamProps) => {
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const detectionIntervalRef = useRef<number | null>(null);
-  const [faceDetected, setFaceDetected] = useState(false);
 
   useEffect(() => {
     const loadModels = async () => {
@@ -37,22 +37,8 @@ const Webcam = ({ onStatusChange, onFaceData }: WebcamProps) => {
       }
     };
 
-    // Create models directory and load models
-    const createModelsDir = async () => {
-      try {
-        // In a production environment, these models would be properly hosted
-        // For this demo, we'll create a mock success for model loading
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setIsModelLoaded(true);
-      } catch (err) {
-        console.error("Error setting up models:", err);
-        setError("Failed to setup face recognition");
-      }
-    };
-
-    createModelsDir();
+    loadModels();
     return () => {
-      // Clean up
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
@@ -62,45 +48,61 @@ const Webcam = ({ onStatusChange, onFaceData }: WebcamProps) => {
     };
   }, [onStatusChange]);
 
-  useEffect(() => {
-    const startWebcam = async () => {
-      if (!isModelLoaded) return;
-      
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user" }
-        });
-        
-        streamRef.current = stream;
-        
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          
-          videoRef.current.onloadedmetadata = () => {
-            if (videoRef.current) {
-              videoRef.current.play();
-              onStatusChange({
-                active: true,
-                faceDetected: false,
-                warning: null
-              });
-              startFaceDetection();
-            }
-          };
-        }
-      } catch (err) {
-        console.error("Error accessing webcam:", err);
-        setError("Failed to access webcam");
-        onStatusChange({
-          active: false,
-          faceDetected: false,
-          warning: "Failed to access webcam. Please check your camera permissions."
-        });
-      }
-    };
+  const saveFaceCapture = async (canvas: HTMLCanvasElement, voterId: string) => {
+    try {
+      // Convert canvas to blob
+      const blob = await new Promise<Blob>((resolve) => 
+        canvas.toBlob((blob) => resolve(blob!), 'image/jpeg', 0.95)
+      );
 
-    startWebcam();
-  }, [isModelLoaded, onStatusChange, onFaceData]);
+      const fileName = `face_${voterId}_${Date.now()}.jpg`;
+      const { error } = await supabase.storage
+        .from('voter_faces')
+        .upload(fileName, blob, {
+          contentType: 'image/jpeg',
+          cacheControl: '3600'
+        });
+
+      if (error) throw error;
+      console.log('Face capture saved successfully');
+    } catch (err) {
+      console.error('Error saving face capture:', err);
+    }
+  };
+
+  const startWebcam = async () => {
+    if (!isModelLoaded) return;
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        }
+      });
+      
+      streamRef.current = stream;
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.onloadedmetadata = () => {
+          if (videoRef.current) {
+            videoRef.current.play();
+            startFaceDetection();
+          }
+        };
+      }
+    } catch (err) {
+      console.error("Error accessing webcam:", err);
+      setError("Failed to access webcam");
+      onStatusChange({
+        active: false,
+        faceDetected: false,
+        warning: "Failed to access webcam. Please check your camera permissions."
+      });
+    }
+  };
 
   const startFaceDetection = () => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -112,42 +114,35 @@ const Webcam = ({ onStatusChange, onFaceData }: WebcamProps) => {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     
-    // Fixed mock face detection to prevent flickering
-    const mockDetection = () => {
+    const detectFace = async () => {
+      if (!video || !canvas) return;
+      
+      const detections = await faceapi
+        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+      
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       
       // Clear previous drawings
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
-      // For demo purposes, always assume face is detected after initial load
-      // This prevents the flickering effect
-      const shouldDetectFace = faceDetected || Math.random() > 0.2;
-      
-      if (shouldDetectFace) {
-        setFaceDetected(true);
+      if (detections) {
+        // Draw face detection results
+        const dims = faceapi.matchDimensions(canvas, video, true);
+        const resizedDetections = faceapi.resizeResults(detections, dims);
         
-        // Draw a rectangle around a simulated face
-        const faceWidth = canvas.width * 0.4;
-        const faceHeight = canvas.height * 0.6;
-        const x = (canvas.width - faceWidth) / 2;
-        const y = (canvas.height - faceHeight) / 3;
+        // Draw the detection box
+        faceapi.draw.drawDetections(canvas, [resizedDetections]);
         
-        ctx.strokeStyle = '#28a745';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(x, y, faceWidth, faceHeight);
-        
-        // Create a mock face descriptor (would be an actual descriptor in production)
-        const mockDescriptor = new Float32Array(128).fill(0).map(() => Math.random());
-        
-        onFaceData(mockDescriptor);
+        onFaceData(detections.descriptor);
         onStatusChange({
           active: true,
           faceDetected: true,
           warning: null
         });
       } else {
-        setFaceDetected(false);
         onFaceData(null);
         onStatusChange({
           active: true,
@@ -157,12 +152,15 @@ const Webcam = ({ onStatusChange, onFaceData }: WebcamProps) => {
       }
     };
     
-    // Initial face detection
-    mockDetection();
-    
-    // Set interval for periodic checks but at a slower rate to avoid flickering
-    detectionIntervalRef.current = window.setInterval(mockDetection, 2000);
+    // Run detection every 500ms
+    detectionIntervalRef.current = window.setInterval(detectFace, 500);
   };
+
+  useEffect(() => {
+    if (isModelLoaded) {
+      startWebcam();
+    }
+  }, [isModelLoaded]);
 
   return (
     <div className="relative bg-black rounded-lg overflow-hidden">
@@ -184,7 +182,7 @@ const Webcam = ({ onStatusChange, onFaceData }: WebcamProps) => {
         
         {!isModelLoaded && (
           <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center">
-            <p className="text-white">Loading face detection...</p>
+            <p className="text-white">Loading face detection models...</p>
           </div>
         )}
       </div>

@@ -1,7 +1,7 @@
 
 import { Label } from "@/components/ui/label";
 import { WebcamStatus } from "@/types";
-import { AlertTriangle, Info } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import Webcam from "../Webcam";
 
 interface WebcamSectionProps {
