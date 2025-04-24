@@ -1,6 +1,5 @@
 
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
 import { 
   Card, 
   CardContent, 
@@ -9,15 +8,14 @@ import {
   CardHeader, 
   CardTitle 
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
-import { Shield, AlertTriangle, Info } from "lucide-react";
+import { Shield } from "lucide-react";
 import { Candidate, Voter, WebcamStatus } from "@/types";
-import Webcam from "./Webcam";
 import { db } from "@/services/database";
 import { faceRecognition } from "@/services/faceRecognition";
+import { VoterDetailsForm } from "./voting/VoterDetailsForm";
+import { WebcamSection } from "./voting/WebcamSection";
+import { SubmitSection } from "./voting/SubmitSection";
 
 const VotingForm = () => {
   const [name, setName] = useState("");
@@ -57,6 +55,26 @@ const VotingForm = () => {
       setDuplicateVoterDetected(null);
     }
   }, [currentFaceDescriptor, toast]);
+
+  const getSubmitButtonDisabledReason = (): string | null => {
+    if (duplicateVoterDetected) {
+      return "You appear to have already voted. Duplicate voting is not allowed.";
+    }
+    
+    if (!webcamStatus.faceDetected) {
+      return "Your face must be clearly visible to ensure voting integrity.";
+    }
+    
+    if (!name || !voterId || !selectedCandidate) {
+      return "Please complete all required fields to submit your vote.";
+    }
+    
+    if (isSubmitting) {
+      return "Your vote is being processed...";
+    }
+    
+    return null;
+  };
 
   const handleSubmit = () => {
     if (!name || !voterId || !selectedCandidate) {
@@ -121,34 +139,6 @@ const VotingForm = () => {
     }
   };
 
-  const handleFaceData = (faceDescriptor: Float32Array | null) => {
-    setCurrentFaceDescriptor(faceDescriptor);
-  };
-
-  const handleWebcamStatusChange = (status: WebcamStatus) => {
-    setWebcamStatus(status);
-  };
-
-  const getSubmitButtonDisabledReason = (): string | null => {
-    if (duplicateVoterDetected) {
-      return "You appear to have already voted. Duplicate voting is not allowed.";
-    }
-    
-    if (!webcamStatus.faceDetected) {
-      return "Your face must be clearly visible to ensure voting integrity.";
-    }
-    
-    if (!name || !voterId || !selectedCandidate) {
-      return "Please complete all required fields to submit your vote.";
-    }
-    
-    if (isSubmitting) {
-      return "Your vote is being processed...";
-    }
-    
-    return null;
-  };
-
   const submitButtonDisabledReason = getSubmitButtonDisabledReason();
   const isButtonDisabled = !!submitButtonDisabledReason;
 
@@ -163,94 +153,33 @@ const VotingForm = () => {
           Cast your vote securely with facial verification
         </CardDescription>
       </CardHeader>
+      
       <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Full Name</Label>
-            <Input 
-              id="name" 
-              placeholder="Enter your full name" 
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="voterId">Voter ID</Label>
-            <Input 
-              id="voterId" 
-              placeholder="Enter your voter ID" 
-              value={voterId}
-              onChange={(e) => setVoterId(e.target.value)}
-            />
-          </div>
-          
-          <div className="space-y-3">
-            <Label>Select Candidate</Label>
-            <RadioGroup 
-              value={selectedCandidate} 
-              onValueChange={setSelectedCandidate}
-              className="space-y-2"
-            >
-              {candidates.map(candidate => (
-                <div key={candidate.id} className="flex items-center space-x-2 border p-3 rounded-md hover:bg-gray-50">
-                  <RadioGroupItem value={candidate.id} id={candidate.id} />
-                  <Label htmlFor={candidate.id} className="cursor-pointer flex-1">
-                    <div className="font-medium">{candidate.name}</div>
-                    <div className="text-sm text-gray-500">{candidate.party}</div>
-                  </Label>
-                </div>
-              ))}
-            </RadioGroup>
-          </div>
-        </div>
+        <VoterDetailsForm
+          name={name}
+          voterId={voterId}
+          selectedCandidate={selectedCandidate}
+          candidates={candidates}
+          onNameChange={setName}
+          onVoterIdChange={setVoterId}
+          onCandidateChange={setSelectedCandidate}
+        />
         
-        <div className="space-y-4">
-          <div>
-            <Label className="block mb-2">Webcam Verification</Label>
-            <Webcam 
-              onStatusChange={handleWebcamStatusChange} 
-              onFaceData={handleFaceData}
-            />
-          </div>
-          
-          {webcamStatus.warning && (
-            <div className="flex items-center gap-2 p-2 bg-voting-warning bg-opacity-20 rounded border border-voting-warning">
-              <AlertTriangle className="h-5 w-5 text-voting-warning" />
-              <span className="text-sm">{webcamStatus.warning}</span>
-            </div>
-          )}
-          
-          {duplicateVoterDetected && (
-            <div className="flex items-center gap-2 p-2 bg-voting-alert bg-opacity-20 rounded border border-voting-alert">
-              <AlertTriangle className="h-5 w-5 text-voting-alert" />
-              <span className="text-sm">You appear to have already voted. Multiple votes are not allowed.</span>
-            </div>
-          )}
-        </div>
+        <WebcamSection
+          webcamStatus={webcamStatus}
+          duplicateVoterDetected={duplicateVoterDetected}
+          onStatusChange={setWebcamStatus}
+          onFaceData={setCurrentFaceDescriptor}
+        />
       </CardContent>
       
-      <CardFooter className="flex flex-col bg-gray-50 p-6">
-        <div className="flex justify-between w-full items-center">
-          <div className="text-sm text-gray-500">
-            Your face will be temporarily recorded for verification purposes only.
-          </div>
-          <Button 
-            type="button" 
-            onClick={handleSubmit}
-            disabled={isButtonDisabled}
-            className="bg-voting-primary hover:bg-voting-primary/90"
-          >
-            {isSubmitting ? "Processing..." : "Submit Vote"}
-          </Button>
-        </div>
-        
-        {isButtonDisabled && submitButtonDisabledReason && (
-          <div className="mt-4 p-3 rounded-md border border-gray-300 bg-gray-100 w-full flex items-center gap-2">
-            <Info className="h-5 w-5 text-voting-primary" />
-            <span className="text-sm text-gray-700 font-medium">{submitButtonDisabledReason}</span>
-          </div>
-        )}
+      <CardFooter className="p-0">
+        <SubmitSection
+          isSubmitting={isSubmitting}
+          isDisabled={isButtonDisabled}
+          disabledReason={submitButtonDisabledReason}
+          onSubmit={handleSubmit}
+        />
       </CardFooter>
     </Card>
   );
